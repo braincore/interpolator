@@ -1,7 +1,13 @@
 use std::f32::consts::E;
 
 pub trait Interpolator {
+    /// Evaluates the interpolation function (f) at x: f(x).
     fn eval(&self, x: f32) -> f32;
+
+    /// Checks whether x is greater than the domain of operation of the
+    /// interpolation function. It's guaranteed that if this returns true for
+    /// x', f(x'+e) = f(x) where e >= 0.
+    fn exceeds_domain(&self, x: f32) -> bool;
 }
 
 pub struct ClosedInterval {
@@ -17,6 +23,7 @@ impl ClosedInterval {
             length: bound.1 - bound.0,
         }
     }
+
     fn check_bound(bound: &(f32, f32)) {
         if bound.0 >= bound.1 {
             // Degenerate & empty intervals not allowed.
@@ -49,9 +56,14 @@ impl Interpolator for StepInterpolator {
             self.range.bound.1
         }
     }
+
+    fn exceeds_domain(&self, x: f32) -> bool {
+        x >= self.domain.bound.1
+    }
 }
 
 pub struct NearestNeighborInterpolator {
+    domain: ClosedInterval,
     range: ClosedInterval,
     midpoint: f32,
 }
@@ -63,6 +75,7 @@ impl NearestNeighborInterpolator {
         let midpoint = (domain_interval.bound.1 - domain_interval.bound.0) / 2.0
             + domain_interval.bound.0;
         NearestNeighborInterpolator {
+            domain: domain_interval,
             range: range_interval,
             midpoint,
         }
@@ -76,6 +89,10 @@ impl Interpolator for NearestNeighborInterpolator {
         } else {
             self.range.bound.1
         }
+    }
+
+    fn exceeds_domain(&self, x: f32) -> bool {
+        x >= self.domain.bound.1
     }
 }
 
@@ -106,6 +123,10 @@ impl Interpolator for LinearInterpolator {
             return self.range.bound.1;
         }
         (x - self.domain.bound.0) * self.slope + self.range.bound.0
+    }
+
+    fn exceeds_domain(&self, x: f32) -> bool {
+        x >= self.domain.bound.1
     }
 }
 
@@ -138,6 +159,10 @@ impl Interpolator for SigmoidInterpolator {
         let x_prime = (x - self.domain.bound.0)/self.domain.length * 8.0 - 4.0;
         sigmoid(x_prime) * self.range.length + self.range.bound.0
     }
+
+    fn exceeds_domain(&self, x: f32) -> bool {
+        x >= self.domain.bound.1
+    }
 }
 
 #[cfg(test)]
@@ -152,6 +177,10 @@ mod tests {
         assert_eq!(si.eval(10.0), 100.0);
         assert_eq!(si.eval(11.0), 200.0);
         assert_eq!(si.eval(21.0), 200.0);
+
+        assert_eq!(si.exceeds_domain(1.0), false);
+        assert_eq!(si.exceeds_domain(15.0), false);
+        assert_eq!(si.exceeds_domain(21.0), true);
     }
 
     #[test]
@@ -165,6 +194,10 @@ mod tests {
         assert_eq!(nni.eval(15.1), 200.0);
         assert_eq!(nni.eval(16.0), 200.0);
         assert_eq!(nni.eval(21.0), 200.0);
+
+        assert_eq!(nni.exceeds_domain(1.0), false);
+        assert_eq!(nni.exceeds_domain(15.0), false);
+        assert_eq!(nni.exceeds_domain(21.0), true);
     }
 
     #[test]
@@ -177,6 +210,10 @@ mod tests {
         assert_eq!(li.eval(15.0), 150.0);
         assert_eq!(li.eval(20.0), 200.0);
         assert_eq!(li.eval(21.0), 200.0);
+
+        assert_eq!(li.exceeds_domain(1.0), false);
+        assert_eq!(li.exceeds_domain(15.0), false);
+        assert_eq!(li.exceeds_domain(21.0), true);
     }
 
     #[test]
@@ -191,5 +228,9 @@ mod tests {
         assert_eq!(si.eval(15.0), 173.105857863);
         assert_eq!(si.eval(18.0), 200.0);
         assert_eq!(si.eval(19.0), 200.0);
+
+        assert_eq!(si.exceeds_domain(1.0), false);
+        assert_eq!(si.exceeds_domain(15.0), false);
+        assert_eq!(si.exceeds_domain(21.0), true);
     }
 }
