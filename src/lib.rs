@@ -17,17 +17,16 @@ pub struct ClosedInterval {
 
 impl ClosedInterval {
     fn new(bound: (f32, f32)) -> ClosedInterval {
-        Self::check_bound(&bound);
         ClosedInterval {
             bound,
             length: bound.1 - bound.0,
         }
     }
 
-    fn check_bound(bound: &(f32, f32)) {
-        if bound.0 >= bound.1 {
+    fn check_bound(&self) {
+        if self.bound.0 >= self.bound.1 {
             // Degenerate & empty intervals not allowed.
-            panic!("Invalid interval: {} !< {}", bound.0, bound.1);
+            panic!("Invalid interval: {} !< {}", self.bound.0, self.bound.1);
         }
     }
 }
@@ -40,6 +39,7 @@ pub struct StepInterpolator {
 impl StepInterpolator {
     pub fn new(domain: (f32, f32), range: (f32, f32)) -> StepInterpolator {
         let domain_interval = ClosedInterval::new(domain);
+        domain_interval.check_bound();
         let range_interval = ClosedInterval::new(range);
         StepInterpolator {
             domain: domain_interval,
@@ -71,6 +71,7 @@ pub struct NearestNeighborInterpolator {
 impl NearestNeighborInterpolator {
     pub fn new(domain: (f32, f32), range: (f32, f32)) -> NearestNeighborInterpolator {
         let domain_interval = ClosedInterval::new(domain);
+        domain_interval.check_bound();
         let range_interval = ClosedInterval::new(range);
         let midpoint = (domain_interval.bound.1 - domain_interval.bound.0) / 2.0
             + domain_interval.bound.0;
@@ -138,6 +139,7 @@ pub struct SigmoidInterpolator {
 impl SigmoidInterpolator {
     pub fn new(domain: (f32, f32), range: (f32, f32)) -> SigmoidInterpolator {
         let domain_interval = ClosedInterval::new(domain);
+        domain_interval.check_bound();
         let range_interval = ClosedInterval::new(range);
         SigmoidInterpolator {
             domain: domain_interval,
@@ -198,6 +200,13 @@ mod tests {
         assert_eq!(nni.exceeds_domain(1.0), false);
         assert_eq!(nni.exceeds_domain(15.0), false);
         assert_eq!(nni.exceeds_domain(21.0), true);
+
+        let nni = NearestNeighborInterpolator::new((10.0, 20.0), (-100.0, -200.0));
+        assert_eq!(nni.eval(9.0), -100.0);
+        assert_eq!(nni.eval(10.0), -100.0);
+        assert_eq!(nni.eval(14.0), -100.0);
+        assert_eq!(nni.eval(16.0), -200.0);
+
     }
 
     #[test]
@@ -214,6 +223,14 @@ mod tests {
         assert_eq!(li.exceeds_domain(1.0), false);
         assert_eq!(li.exceeds_domain(15.0), false);
         assert_eq!(li.exceeds_domain(21.0), true);
+
+        let li = LinearInterpolator::new((10.0, 20.0), (-100.0, -200.0));
+        assert_eq!(li.eval(9.0), -100.0);
+        assert_eq!(li.eval(10.0), -100.0);
+        assert_eq!(li.eval(12.5), -125.0);
+        assert_eq!(li.eval(15.0), -150.0);
+        assert_eq!(li.eval(20.0), -200.0);
+        assert_eq!(li.eval(21.0), -200.0);
     }
 
     #[test]
@@ -232,5 +249,14 @@ mod tests {
         assert_eq!(si.exceeds_domain(1.0), false);
         assert_eq!(si.exceeds_domain(15.0), false);
         assert_eq!(si.exceeds_domain(21.0), true);
+
+        let si = SigmoidInterpolator::new((10.0, 18.0), (-100.0, -200.0));
+        assert_eq!(si.eval(9.0), -100.0);
+        assert_eq!(si.eval(10.0), -100.0);
+        assert_eq!(si.eval(11.0), -104.74258731);
+        assert_eq!(si.eval(12.0), -111.9202922);
+        assert_eq!(si.eval(14.0), -150.0);
+        assert_eq!(si.eval(15.0), -173.105857863);
+        assert_eq!(si.eval(18.0), -200.0);
     }
 }
