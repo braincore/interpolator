@@ -16,8 +16,8 @@ pub struct ClosedInterval {
 }
 
 impl ClosedInterval {
-    fn new(bound: (f32, f32)) -> ClosedInterval {
-        ClosedInterval {
+    fn new(bound: (f32, f32)) -> Self {
+        Self {
             bound,
             length: bound.1 - bound.0,
         }
@@ -37,11 +37,11 @@ pub struct StepInterpolator {
 }
 
 impl StepInterpolator {
-    pub fn new(domain: (f32, f32), range: (f32, f32)) -> StepInterpolator {
+    pub fn new(domain: (f32, f32), range: (f32, f32)) -> Self {
         let domain_interval = ClosedInterval::new(domain);
         domain_interval.check_bound();
         let range_interval = ClosedInterval::new(range);
-        StepInterpolator {
+        Self {
             domain: domain_interval,
             range: range_interval,
         }
@@ -69,13 +69,13 @@ pub struct NearestNeighborInterpolator {
 }
 
 impl NearestNeighborInterpolator {
-    pub fn new(domain: (f32, f32), range: (f32, f32)) -> NearestNeighborInterpolator {
+    pub fn new(domain: (f32, f32), range: (f32, f32)) -> Self {
         let domain_interval = ClosedInterval::new(domain);
         domain_interval.check_bound();
         let range_interval = ClosedInterval::new(range);
         let midpoint = (domain_interval.bound.1 - domain_interval.bound.0) / 2.0
             + domain_interval.bound.0;
-        NearestNeighborInterpolator {
+        Self {
             domain: domain_interval,
             range: range_interval,
             midpoint,
@@ -104,11 +104,11 @@ pub struct LinearInterpolator {
 }
 
 impl LinearInterpolator {
-    pub fn new(domain: (f32, f32), range: (f32, f32)) -> LinearInterpolator {
+    pub fn new(domain: (f32, f32), range: (f32, f32)) -> Self {
         let domain_interval = ClosedInterval::new(domain);
         let range_interval = ClosedInterval::new(range);
         let slope = range_interval.length / domain_interval.length;
-        LinearInterpolator {
+        Self {
             domain: domain_interval,
             range: range_interval,
             slope,
@@ -137,11 +137,11 @@ pub struct SigmoidInterpolator {
 }
 
 impl SigmoidInterpolator {
-    pub fn new(domain: (f32, f32), range: (f32, f32)) -> SigmoidInterpolator {
+    pub fn new(domain: (f32, f32), range: (f32, f32)) -> Self {
         let domain_interval = ClosedInterval::new(domain);
         domain_interval.check_bound();
         let range_interval = ClosedInterval::new(range);
-        SigmoidInterpolator {
+        Self {
             domain: domain_interval,
             range: range_interval,
         }
