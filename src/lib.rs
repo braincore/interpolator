@@ -8,8 +8,11 @@ pub trait Interpolator {
     /// interpolation function. It's guaranteed that if this returns true for
     /// x', f(x'+e) = f(x) where e >= 0.
     fn exceeds_domain(&self, x: f32) -> bool;
+
+    fn get_domain(&self) -> ClosedInterval;
 }
 
+#[derive(Clone)]
 pub struct ClosedInterval {
     bound: (f32, f32),
     length: f32,
@@ -28,6 +31,10 @@ impl ClosedInterval {
             // Degenerate & empty intervals not allowed.
             panic!("Invalid interval: {} !< {}", self.bound.0, self.bound.1);
         }
+    }
+
+    fn contains(&self, x: f32) -> bool {
+        x >= self.bound.0 && x <= self.bound.1
     }
 }
 
@@ -59,6 +66,10 @@ impl Interpolator for StepInterpolator {
 
     fn exceeds_domain(&self, x: f32) -> bool {
         x >= self.domain.bound.1
+    }
+
+    fn get_domain(&self) -> ClosedInterval {
+        self.domain.clone()
     }
 }
 
@@ -95,6 +106,10 @@ impl Interpolator for NearestNeighborInterpolator {
     fn exceeds_domain(&self, x: f32) -> bool {
         x >= self.domain.bound.1
     }
+
+    fn get_domain(&self) -> ClosedInterval {
+        self.domain.clone()
+    }
 }
 
 pub struct LinearInterpolator {
@@ -128,6 +143,10 @@ impl Interpolator for LinearInterpolator {
 
     fn exceeds_domain(&self, x: f32) -> bool {
         x >= self.domain.bound.1
+    }
+
+    fn get_domain(&self) -> ClosedInterval {
+        self.domain.clone()
     }
 }
 
@@ -164,6 +183,74 @@ impl Interpolator for SigmoidInterpolator {
 
     fn exceeds_domain(&self, x: f32) -> bool {
         x >= self.domain.bound.1
+    }
+
+    fn get_domain(&self) -> ClosedInterval {
+        self.domain.clone()
+    }
+}
+
+pub struct PiecewiseInterpolator {
+    /// Computed via union of all interpolator domains.
+    domain: ClosedInterval,
+    interpolators: Vec<Box<Interpolator>>,
+}
+
+impl PiecewiseInterpolator {
+    pub fn new(interpolators: Vec<Box<Interpolator>>) -> Self {
+        if interpolators.len() == 0 {
+            panic!("Need at least one interpolator.");
+        }
+
+        let mut expected_left_bound = None;
+        for interp in interpolators.iter() {
+            match expected_left_bound {
+                None => {},
+                Some(assert_x0) => {
+                    if assert_x0 != interp.get_domain().bound.0 {
+                        panic!("Combined domains are not closed.")
+                    }
+                }
+            }
+            expected_left_bound = Some(interp.get_domain().bound.1);
+        }
+
+        // Safe unwraps since we asserted above that there's at least one item.
+        let domain = ClosedInterval::new(
+            (interpolators.first().unwrap().get_domain().bound.0,
+             interpolators.last().unwrap().get_domain().bound.1)
+        );
+
+        Self {
+            domain,
+            interpolators,
+        }
+    }
+}
+
+impl Interpolator for PiecewiseInterpolator {
+    fn eval(&self, x: f32) -> f32 {
+        if x <= self.domain.bound.0 {
+            return self.interpolators.first().unwrap().eval(x);
+        } else if  x >= self.domain.bound.1 {
+            return self.interpolators.last().unwrap().eval(x);
+        }
+        println!("x: {:?}", x);
+        for interp in self.interpolators.iter() {
+            if interp.get_domain().contains(x) {
+                return interp.eval(x);
+            }
+        }
+        // Impossible.
+        panic!("No interpolator domain contained x.");
+    }
+
+    fn exceeds_domain(&self, x: f32) -> bool {
+        x >= self.domain.bound.1
+    }
+
+    fn get_domain(&self) -> ClosedInterval {
+        self.domain.clone()
     }
 }
 
@@ -258,5 +345,50 @@ mod tests {
         assert_eq!(si.eval(14.0), -150.0);
         assert_eq!(si.eval(15.0), -173.105857863);
         assert_eq!(si.eval(18.0), -200.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Need at least one interpolator.")]
+    fn piecewise_panic_nointerps() {
+        use super::PiecewiseInterpolator;
+        PiecewiseInterpolator::new(vec![]);
+    }
+
+    #[test]
+    #[should_panic(expected = "Combined domains are not closed.")]
+    fn piecewise_panic_nonclosed() {
+        use super::PiecewiseInterpolator;
+        use super::LinearInterpolator;
+        PiecewiseInterpolator::new(vec![
+            Box::new(LinearInterpolator::new((10.0, 20.0), (30.0, 40.0))),
+            Box::new(LinearInterpolator::new((21.0, 30.0), (40.0, 50.0))),
+        ]);
+    }
+
+    #[test]
+    fn piecewise() {
+        use super::PiecewiseInterpolator;
+        use super::LinearInterpolator;
+        use super::NearestNeighborInterpolator;
+        let pi = PiecewiseInterpolator::new(vec![
+            Box::new(LinearInterpolator::new((10.0, 20.0), (30.0, 40.0))),
+            Box::new(NearestNeighborInterpolator::new((20.0, 30.0), (40.0, 50.0))),
+        ]);
+
+        assert_eq!(pi.exceeds_domain(1.0), false);
+        assert_eq!(pi.exceeds_domain(20.0), false);
+        assert_eq!(pi.exceeds_domain(29.0), false);
+        assert_eq!(pi.exceeds_domain(30.0), true);
+        assert_eq!(pi.exceeds_domain(31.0), true);
+
+        assert_eq!(pi.eval(0.0), 30.0);
+        assert_eq!(pi.eval(10.0), 30.0);
+        assert_eq!(pi.eval(15.0), 35.0);
+        assert_eq!(pi.eval(20.0), 40.0);
+        assert_eq!(pi.eval(23.0), 40.0);
+        assert_eq!(pi.eval(25.0), 40.0);
+        assert_eq!(pi.eval(26.0), 50.0);
+        assert_eq!(pi.eval(30.0), 50.0);
+        assert_eq!(pi.eval(35.0), 50.0);
     }
 }
